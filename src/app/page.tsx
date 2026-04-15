@@ -10,11 +10,14 @@ import {
   getLastClass,
   getRecords,
   downloadCsv,
+  seedHistoricalData,
+  getTotalCount,
   type Student,
   type AttendanceRecord,
 } from "@/lib/storage";
 
 function formatDate(dateStr: string): string {
+  if (dateStr === "----") return "--";
   return new Date(dateStr + "T00:00:00").toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -55,20 +58,15 @@ function StudentCard({ student }: { student: { id: Student; name: string; belt: 
 
   const weeklyCount = getWeeklyRecords(student.id).length;
   const monthlyCount = getMonthlyRecords(student.id).length;
-  const totalCount = records.length;
+  const totalCount = getTotalCount(student.id);
   const lastClass = getLastClass(student.id);
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-      {/* Card Header */}
       <div className="px-6 py-5 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          {/* Placeholder for team logo - replace src with your logo path */}
-          {/* <img src="/team-logo.png" alt="Logo equipe" className="w-12 h-12 rounded-full object-cover" /> */}
-          <div>
-            <p className="text-zinc-400 text-xs tracking-widest uppercase font-medium mb-0.5">{student.belt}</p>
-            <h2 className="text-white font-bold text-2xl tracking-tight">{student.name}</h2>
-          </div>
+        <div>
+          <p className="text-zinc-400 text-xs tracking-widest uppercase font-medium mb-0.5">{student.belt}</p>
+          <h2 className="text-white font-bold text-2xl tracking-tight">{student.name}</h2>
         </div>
 
         <div className="text-right">
@@ -77,7 +75,6 @@ function StudentCard({ student }: { student: { id: Student; name: string; belt: 
         </div>
       </div>
 
-      {/* Stats row */}
       <div className="grid grid-cols-2 border-y border-zinc-800">
         <div className="px-6 py-4 border-r border-zinc-800">
           <p className="text-2xl font-bold text-blue-400">{monthlyCount}</p>
@@ -89,7 +86,6 @@ function StudentCard({ student }: { student: { id: Student; name: string; belt: 
         </div>
       </div>
 
-      {/* Footer: last class + button */}
       <div className="px-6 py-4 flex items-center gap-4">
         <div className="flex items-center gap-3 min-w-0">
           {lastClass ? (
@@ -99,7 +95,7 @@ function StudentCard({ student }: { student: { id: Student; name: string; belt: 
               <StreakBadge student={student.id} />
             </>
           ) : (
-            <span className="text-zinc-600 text-sm">sem aulas registradas</span>
+            <span className="text-zinc-600 text-sm">sem aulas com data</span>
           )}
         </div>
 
@@ -175,19 +171,20 @@ function HistoryTable() {
 }
 
 export default function HomePage() {
+  useEffect(() => {
+    seedHistoricalData();
+  }, []);
+
   return (
     <main className="min-h-screen bg-zinc-950 flex flex-col">
-
-      {/* Header */}
       <header className="px-4 pt-8 pb-6 flex flex-col items-center text-center">
-        <img src="/team-logo.jpg" alt="Logo equipe" className="w-20 h-20 rounded-xl object-cover" style={{ transform: 'rotate(0deg)' }} />
+        <img src="/team-logo.jpg" alt="Logo equipe" className="w-20 h-20 rounded-xl object-cover" />
         <h1 className="text-2xl font-black text-white tracking-tighter">
           Jiu Jitsu <span className="text-yellow-500">Tracker</span>
         </h1>
         <p className="text-zinc-500 text-sm mt-1 tracking-wide">Bruno & Fabiola</p>
       </header>
 
-      {/* Cards */}
       <section className="flex-1 px-4 pb-8 max-w-xl mx-auto w-full flex flex-col gap-3">
         {STUDENTS.map((s) => (
           <StudentCard key={s.id} student={s} />

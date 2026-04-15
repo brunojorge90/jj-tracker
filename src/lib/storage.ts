@@ -3,11 +3,12 @@ export type Student = "bruno" | "fabiola";
 export interface AttendanceRecord {
   id: string;
   student: Student;
-  date: string; // YYYY-MM-DD
-  weekDay: string;
+  date: string; // YYYY-MM-DD — "----" quando não tem data
+  weekDay: string; // "--" quando não tem dia
   weekNumber: number;
   year: number;
   timestamp: number;
+  hasDate: boolean; // false = registro histórico sem data
 }
 
 export interface StudentInfo {
@@ -15,11 +16,12 @@ export interface StudentInfo {
   name: string;
   belt: string;
   emoji: string;
+  baseCount: number; // aulas históricas sem data
 }
 
 export const STUDENTS: StudentInfo[] = [
-  { id: "bruno", name: "Bruno Jorge", belt: "Faixa Branca", emoji: "🧡" },
-  { id: "fabiola", name: "Fabiola Stopa", belt: "Faixa Branca", emoji: "💜" },
+  { id: "bruno", name: "Bruno Jorge", belt: "Faixa Branca", emoji: "🧡", baseCount: 46 },
+  { id: "fabiola", name: "Fabiola Stopa", belt: "Faixa Branca", emoji: "💜", baseCount: 19 },
 ];
 
 const STORAGE_KEY = "jj_attendance";
@@ -44,6 +46,7 @@ export function addRecord(student: Student): AttendanceRecord {
     weekNumber: getWeekNumber(now),
     year: now.getFullYear(),
     timestamp: now.getTime(),
+    hasDate: true,
   };
   const records = getRecords();
   records.unshift(record);
@@ -55,6 +58,10 @@ export function getRecordsByStudent(student: Student): AttendanceRecord[] {
   return getRecords().filter((r) => r.student === student);
 }
 
+export function getDatedRecordsByStudent(student: Student): AttendanceRecord[] {
+  return getRecords().filter((r) => r.student === student && r.hasDate);
+}
+
 export function getWeeklyRecords(student: Student): AttendanceRecord[] {
   const now = new Date();
   const currentWeek = getWeekNumber(now);
@@ -62,6 +69,7 @@ export function getWeeklyRecords(student: Student): AttendanceRecord[] {
   return getRecords().filter(
     (r) =>
       r.student === student &&
+      r.hasDate &&
       r.weekNumber === currentWeek &&
       r.year === currentYear
   );
@@ -72,6 +80,7 @@ export function getMonthlyRecords(student: Student): AttendanceRecord[] {
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
   return getRecords().filter((r) => {
+    if (!r.hasDate) return false;
     const rDate = new Date(r.date);
     return (
       r.student === student &&
@@ -82,7 +91,7 @@ export function getMonthlyRecords(student: Student): AttendanceRecord[] {
 }
 
 export function getLastClass(student: Student): AttendanceRecord | null {
-  return getRecords().find((r) => r.student === student) ?? null;
+  return getRecords().find((r) => r.student === student && r.hasDate) ?? null;
 }
 
 function getWeekNumber(date: Date): number {
@@ -96,9 +105,10 @@ function getWeekNumber(date: Date): number {
 export function exportToCsv(): string {
   const records = getRecords();
   const header = "ID,Aluno,Data,Dia da Semana,Semana,Ano\n";
-  const rows = records.map((r) =>
-    [r.id, r.student, r.date, r.weekDay, r.weekNumber, r.year].join(",")
-  ).join("\n");
+  const rows = records
+    .filter((r) => r.hasDate)
+    .map((r) => [r.id, r.student, r.date, r.weekDay, r.weekNumber, r.year].join(","))
+    .join("\n");
   return header + rows;
 }
 
@@ -118,68 +128,29 @@ export function seedHistoricalData() {
   const existing = getRecords();
   if (existing.length > 0) return;
 
-  const brunoCount = 46;
-  const fabiolaCount = 19;
+  const records: AttendanceRecord[] = [];
 
-  const now = new Date();
-  const start = new Date(now);
-  start.setMonth(start.getMonth() - 4);
-  start.setDate(1);
+  for (const student of STUDENTS) {
+    for (let i = 0; i < student.baseCount; i++) {
+      records.push({
+        id: `hist-${student.id}-${i}`,
+        student: student.id,
+        date: "----",
+        weekDay: "--",
+        weekNumber: 0,
+        year: 0,
+        timestamp: 0,
+        hasDate: false,
+      });
+    }
+  }
 
-  const brunoDates = generateDates(brunoCount, start, now, 3, 2);
-  const fabiolaDates = generateDates(fabiolaCount, start, now, 2, 1);
-
-  const records: AttendanceRecord[] = [
-    ...brunoDates.map((d) => makeRecord("bruno", d)),
-    ...fabiolaDates.map((d) => makeRecord("fabiola", d)),
-  ];
-
-  records.sort((a, b) => a.timestamp - b.timestamp);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
 }
 
-function makeRecord(student: Student, date: Date): AttendanceRecord {
-  return {
-    id: `${student}-${date.getTime()}`,
-    student,
-    date: date.toISOString().split("T")[0],
-    weekDay: date.toLocaleDateString("pt-BR", { weekday: "long" }),
-    weekNumber: getWeekNumber(date),
-    year: date.getFullYear(),
-    timestamp: date.getTime(),
-  };
-}
-
-function generateDates(
-  count: number,
-  start: Date,
-  end: Date,
-  maxPerWeek: number,
-  minPerWeek: number
-): Date[] {
-  const dates: Date[] = [];
-  const current = new Date(start);
-
-  while (dates.length < count && current <= end) {
-    const dayOfWeek = current.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      current.setDate(current.getDate() + 1);
-      continue;
-    }
-
-    const weekStart = new Date(current);
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-
-    const classesThisWeek = dates.filter((d) => d >= weekStart && d <= weekEnd).length;
-
-    if (classesThisWeek < maxPerWeek && Math.random() > 0.2) {
-      dates.push(new Date(current));
-    }
-
-    current.setDate(current.getDate() + 1);
-  }
-
-  return dates;
+export function getTotalCount(student: Student): number {
+  const studentInfo = STUDENTS.find((s) => s.id === student);
+  const base = studentInfo?.baseCount ?? 0;
+  const dated = getDatedRecordsByStudent(student).length;
+  return base + dated;
 }
