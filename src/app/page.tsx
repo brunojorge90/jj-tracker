@@ -10,7 +10,6 @@ import {
   getLastClass,
   getRecords,
   downloadCsv,
-  seedHistoricalData,
   type Student,
   type AttendanceRecord,
 } from "@/lib/storage";
@@ -176,10 +175,6 @@ function HistoryTable() {
 }
 
 export default function HomePage() {
-  useEffect(() => {
-    seedHistoricalData();
-  }, []);
-
   return (
     <main className="min-h-screen bg-zinc-950 flex flex-col">
 
