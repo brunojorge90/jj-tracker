@@ -125,16 +125,16 @@ function seedRecords(baseCount: Record<Student, number>): AttendanceRecord[] {
   return records;
 }
 
-export async function addRecord(student: Student): Promise<AttendanceRecord> {
-  const now = new Date();
+export async function addRecordWithDate(student: Student, dateStr: string): Promise<AttendanceRecord> {
+  const date = new Date(dateStr + "T12:00:00");
   const record: AttendanceRecord = {
-    id: `${student}-${now.getTime()}`,
+    id: `${student}-${date.getTime()}`,
     student,
-    date: now.toISOString().split("T")[0],
-    weekDay: now.toLocaleDateString("pt-BR", { weekday: "long" }),
-    weekNumber: getWeekNumber(now),
-    year: now.getFullYear(),
-    timestamp: now.getTime(),
+    date: dateStr,
+    weekDay: date.toLocaleDateString("pt-BR", { weekday: "long" }),
+    weekNumber: getWeekNumber(date),
+    year: date.getFullYear(),
+    timestamp: date.getTime(),
     hasDate: true,
   };
 
@@ -143,6 +143,11 @@ export async function addRecord(student: Student): Promise<AttendanceRecord> {
   saveRecords(records);
   await fileWrite({ records, baseCount: { bruno: 46, fabiola: 19 } });
   return record;
+}
+
+export async function addRecord(student: Student): Promise<AttendanceRecord> {
+  const now = new Date();
+  return addRecordWithDate(student, now.toISOString().split("T")[0]);
 }
 
 export async function saveToFile(): Promise<boolean> {

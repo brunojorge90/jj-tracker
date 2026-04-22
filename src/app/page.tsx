@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   STUDENTS,
   addRecord,
+  addRecordWithDate,
   getRecordsByStudent,
   getWeeklyRecords,
   getMonthlyRecords,
@@ -53,13 +54,26 @@ function StudentCard({
 }) {
   const [justAdded, setJustAdded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedDate, setSelectedDate] = useState("");
+
+  const today = new Date().toISOString().split("T")[0];
 
   function handleAdd() {
-    addRecord(student.id).then(() => {
-      onRefresh();
-      setJustAdded(true);
-      setTimeout(() => setJustAdded(false), 1500);
-    });
+    const dateToSave = selectedDate || today;
+    if (selectedDate) {
+      addRecordWithDate(student.id, selectedDate).then(() => {
+        onRefresh();
+        setJustAdded(true);
+        setSelectedDate("");
+        setTimeout(() => setJustAdded(false), 1500);
+      });
+    } else {
+      addRecord(student.id).then(() => {
+        onRefresh();
+        setJustAdded(true);
+        setTimeout(() => setJustAdded(false), 1500);
+      });
+    }
   }
 
   function handleSave() {
@@ -97,8 +111,8 @@ function StudentCard({
         </div>
       </div>
 
-      <div className="px-6 py-4 flex items-center gap-4">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="px-6 py-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 min-w-0">
           {lastClass ? (
             <>
               <span className="text-zinc-500 text-xs tracking-wide shrink-0">ultima:</span>
@@ -110,25 +124,33 @@ function StudentCard({
           )}
         </div>
 
-        <button
-          onClick={handleAdd}
-          className={`
-            px-5 py-3 rounded-xl font-bold text-sm tracking-widest uppercase transition-all duration-200
-            bg-yellow-600 hover:bg-yellow-500 active:scale-95 text-black
-            ${justAdded ? "ring-4 ring-green-400" : "shadow-lg shadow-yellow-900/20"}
-          `}
-        >
-          {justAdded ? "OK" : "+ aula"}
-        </button>
-
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-4 py-3 rounded-xl font-bold text-xs tracking-widest uppercase transition-all duration-200 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-300 disabled:opacity-50"
-          title="Salvar no arquivo"
-        >
-          {saving ? "..." : "💾 Salvar"}
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            max={today}
+            className="bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-600"
+          />
+          <button
+            onClick={handleAdd}
+            className={`
+              px-5 py-3 rounded-xl font-bold text-sm tracking-widest uppercase transition-all duration-200
+              bg-yellow-600 hover:bg-yellow-500 active:scale-95 text-black
+              ${justAdded ? "ring-4 ring-green-400" : "shadow-lg shadow-yellow-900/20"}
+            `}
+          >
+            {justAdded ? "OK" : "+ aula"}
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-3 rounded-xl font-bold text-xs tracking-widest uppercase transition-all duration-200 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-300 disabled:opacity-50"
+            title="Salvar no arquivo"
+          >
+            {saving ? "..." : "💾"}
+          </button>
+        </div>
       </div>
     </div>
   );
