@@ -1,27 +1,22 @@
 import { NextResponse } from "next/server";
-import { readFile, writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { Redis } from "@upstash/redis";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "attendance.json");
+const redis = new Redis({
+  url: "https://driven-viper-104620.upstash.io",
+  token: "gQAAAAAAAZisAAIgcDE4MzZlYTQ1YzhlOWY0NTZjOGFlZmU3YTJhYzVlMDBkMQ",
+});
 
-async function ensureDir() {
-  await mkdir(DATA_DIR, { recursive: true });
-}
+const STORAGE_KEY = "jj_attendance";
 
 export async function GET() {
   try {
-    await ensureDir();
-    let raw: string;
-    try {
-      raw = await readFile(DATA_FILE, "utf-8");
-    } catch {
-      // File doesn't exist yet — not an error, returns empty
-      return NextResponse.json({ records: [], baseCount: { bruno: 46, fabiola: 19 } });
+    const data = await redis.get<string>(STORAGE_KEY);
+    if (data) {
+      return NextResponse.json(JSON.parse(data as string));
     }
-    const data = JSON.parse(raw);
-    return NextResponse.json(data);
-  } catch (err) {
-    return NextResponse.json({ error: "Failed to read" }, { status: 500 });
+    return NextResponse.json({ records: [] });
+  } catch (error) {
+    console.error("Redis read error:", error);
+    return NextResponse.json({ records: [] });
   }
 }

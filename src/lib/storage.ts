@@ -1,236 +1,163 @@
+import { Redis } from "@upstash/redis";
+
+const redis = new Redis({
+  url: "https://driven-viper-104620.upstash.io",
+  token: "gQAAAAAAAZisAAIgcDE4MzZlYTQ1YzhlOWY0NTZjOGFlZmU3YTJhYzVlMDBkMQ",
+});
+
 export type Student = "bruno" | "fabiola";
 
 export interface AttendanceRecord {
   id: string;
   student: Student;
-  date: string; // YYYY-MM-DD — "----" quando não tem data
-  weekDay: string; // "--" quando não tem dia
-  weekNumber: number;
-  year: number;
-  timestamp: number;
-  hasDate: boolean; // false = registro histórico sem data
+  date: string;
+  weekDay: string;
 }
 
-export interface StudentInfo {
-  id: Student;
-  name: string;
-  belt: string;
-  emoji: string;
-  baseCount: number; // aulas históricas sem data
+interface StorageData {
+  records: AttendanceRecord[];
 }
-
-export const STUDENTS: StudentInfo[] = [
-  { id: "bruno", name: "Bruno Jorge", belt: "Faixa Branca", emoji: "🧡", baseCount: 46 },
-  { id: "fabiola", name: "Fabiola Stopa", belt: "Faixa Branca", emoji: "💜", baseCount: 19 },
-];
 
 const STORAGE_KEY = "jj_attendance";
+const BASE_COUNT: Record<Student, number> = { bruno: 46, fabiola: 19 };
 
-// ─── Persistência em arquivo ( Next.js API route ) ───────────────────────────
+export const STUDENTS: { id: Student; name: string; belt: string; emoji: string }[] = [
+  { id: "bruno", name: "Bruno", belt: "Faixa Preta", emoji: "🖤" },
+  { id: "fabiola", name: "Fabiola", belt: "Faixa Roxa", emoji: "💜" },
+];
 
-const API_BASE = "/api/storage";
+function getWeekDay(dateStr: string): string {
+  const days = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"];
+  return days[new Date(dateStr + "T00:00:00").getDay()];
+}
 
-async function fileRead(): Promise<{ records: AttendanceRecord[]; baseCount: Record<Student, number> } | null> {
+export async function fetchFromRedis(): Promise<StorageData> {
   try {
-    const res = await fetch(`${API_BASE}/read`);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
-async function fileWrite(data: { records: AttendanceRecord[]; baseCount: Record<Student, number> }): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/write`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-// ─── Leitura do localStorage ( fallback + cache local ) ─────────────────────
-
-export function getRecords(): AttendanceRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveRecords(records: AttendanceRecord[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-}
-
-// ─── Inicialização: carrega do arquivo ou do localStorage ────────────────────
-
-let initDone = false;
-
-export async function initializeStorage(): Promise<{
-  records: AttendanceRecord[];
-  baseCount: Record<Student, number>;
-}> {
-  if (typeof window === "undefined") {
-    return { records: [], baseCount: { bruno: 46, fabiola: 19 } };
-  }
-
-  const fileData = await fileRead();
-
-  if (fileData) {
-    // Arquivo existe → usa ele, sincroniza localStorage
-    saveRecords(fileData.records);
-    return fileData;
-  }
-
-  // Arquivo não existe → carrega do localStorage e cria arquivo
-  const local = getRecords();
-  const baseCount = { bruno: 46, fabiola: 19 };
-
-  if (local.length > 0) {
-    await fileWrite({ records: local, baseCount });
-    return { records: local, baseCount };
-  }
-
-  // localStorage vazio → seed + salva
-  const seeded = seedRecords(baseCount);
-  await fileWrite({ records: seeded, baseCount });
-  saveRecords(seeded);
-  return { records: seeded, baseCount };
-}
-
-function seedRecords(baseCount: Record<Student, number>): AttendanceRecord[] {
-  const records: AttendanceRecord[] = [];
-  for (const student of STUDENTS) {
-    for (let i = 0; i < baseCount[student.id]; i++) {
-      records.push({
-        id: `hist-${student.id}-${i}`,
-        student: student.id,
-        date: "----",
-        weekDay: "--",
-        weekNumber: 0,
-        year: 0,
-        timestamp: 0,
-        hasDate: false,
-      });
+    const data = await redis.get<string>(STORAGE_KEY);
+    if (data) {
+      const parsed = JSON.parse(data as string) as StorageData;
+      // Cache in localStorage for helper functions
+      if (typeof window !== "undefined") {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      }
+      return parsed;
     }
+  } catch (e) {
+    console.error("Redis read error:", e);
   }
-  return records;
+  return { records: [] };
 }
 
-export async function addRecordWithDate(student: Student, dateStr: string): Promise<AttendanceRecord> {
-  const date = new Date(dateStr + "T12:00:00");
-  const record: AttendanceRecord = {
-    id: `${student}-${date.getTime()}`,
+export async function writeToRedis(data: StorageData): Promise<void> {
+  try {
+    await redis.set(STORAGE_KEY, JSON.stringify(data));
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+  } catch (e) {
+    console.error("Redis write error:", e);
+  }
+}
+
+export async function initializeStorage(): Promise<StorageData> {
+  return fetchFromRedis();
+}
+
+export async function saveToFile(): Promise<StorageData> {
+  const data = await fetchFromRedis();
+  return data;
+}
+
+export async function addRecord(student: Student): Promise<StorageData> {
+  const today = new Date().toISOString().split("T")[0];
+  return addRecordWithDate(student, today);
+}
+
+export async function addRecordWithDate(student: Student, dateStr: string): Promise<StorageData> {
+  const data = await fetchFromRedis();
+
+  const id = `${student}-${dateStr}-${Date.now()}`;
+  const newRecord: AttendanceRecord = {
+    id,
     student,
     date: dateStr,
-    weekDay: date.toLocaleDateString("pt-BR", { weekday: "long" }),
-    weekNumber: getWeekNumber(date),
-    year: date.getFullYear(),
-    timestamp: date.getTime(),
-    hasDate: true,
+    weekDay: getWeekDay(dateStr),
   };
 
-  const records = getRecords();
-  records.unshift(record);
-  saveRecords(records);
-  await fileWrite({ records, baseCount: { bruno: 46, fabiola: 19 } });
-  return record;
+  data.records.push(newRecord);
+  data.records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  await writeToRedis(data);
+  return data;
 }
 
-export async function addRecord(student: Student): Promise<AttendanceRecord> {
+// Server-side helpers for API routes
+export async function getStorageData(): Promise<StorageData> {
+  return fetchFromRedis();
+}
+
+// Client-side helpers (read from localStorage cache)
+export function getRecordsByStudentLocal(student: Student): AttendanceRecord[] {
+  if (typeof window === "undefined") return [];
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored) return [];
+  const data = JSON.parse(stored) as StorageData;
+  return data.records.filter((r) => r.student === student);
+}
+
+export function getWeeklyRecordsLocal(student: Student): AttendanceRecord[] {
+  const records = getRecordsByStudentLocal(student);
   const now = new Date();
-  return addRecordWithDate(student, now.toISOString().split("T")[0]);
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+
+  return records.filter((r) => new Date(r.date + "T00:00:00") >= weekStart);
 }
 
-export async function saveToFile(): Promise<boolean> {
-  const records = getRecords();
-  return fileWrite({ records, baseCount: { bruno: 46, fabiola: 19 } });
-}
-
-// ─── Queries ( usam localStorage como cache, arquivo é a verdade ) ────────────
-
-export function getRecordsByStudent(student: Student): AttendanceRecord[] {
-  return getRecords().filter((r) => r.student === student);
-}
-
-export function getDatedRecordsByStudent(student: Student): AttendanceRecord[] {
-  return getRecords().filter((r) => r.student === student && r.hasDate);
-}
-
-export function getWeeklyRecords(student: Student): AttendanceRecord[] {
+export function getMonthlyRecordsLocal(student: Student): AttendanceRecord[] {
+  const records = getRecordsByStudentLocal(student);
   const now = new Date();
-  const currentWeek = getWeekNumber(now);
-  const currentYear = now.getFullYear();
-  return getRecords().filter(
-    (r) =>
-      r.student === student &&
-      r.hasDate &&
-      r.weekNumber === currentWeek &&
-      r.year === currentYear
-  );
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  return records.filter((r) => new Date(r.date + "T00:00:00") >= monthStart);
 }
 
-export function getMonthlyRecords(student: Student): AttendanceRecord[] {
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-  return getRecords().filter((r) => {
-    if (!r.hasDate) return false;
-    const rDate = new Date(r.date);
-    return (
-      r.student === student &&
-      rDate.getMonth() === currentMonth &&
-      rDate.getFullYear() === currentYear
-    );
+export function getLastClassLocal(student: Student): AttendanceRecord | null {
+  const records = getRecordsByStudentLocal(student);
+  return records.length > 0 ? records[0] : null;
+}
+
+export function getTotalCountLocal(student: Student): number {
+  return BASE_COUNT[student] + getRecordsByStudentLocal(student).length;
+}
+
+// Aliases for backward compatibility with existing code
+export const getRecordsByStudent = getRecordsByStudentLocal;
+export const getWeeklyRecords = getWeeklyRecordsLocal;
+export const getMonthlyRecords = getMonthlyRecordsLocal;
+export const getLastClass = getLastClassLocal;
+export const getTotalCount = getTotalCountLocal;
+
+export function downloadCsv(): void {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored) return;
+
+  const data = JSON.parse(stored) as StorageData;
+  const rows = [["Aluno", "Data", "Dia da Semana"]];
+
+  data.records.forEach((r) => {
+    rows.push([r.student, r.date, r.weekDay]);
   });
-}
 
-export function getLastClass(student: Student): AttendanceRecord | null {
-  return getRecords().find((r) => r.student === student && r.hasDate) ?? null;
-}
-
-export function getTotalCount(student: Student): number {
-  const studentInfo = STUDENTS.find((s) => s.id === student);
-  const base = studentInfo?.baseCount ?? 0;
-  const dated = getDatedRecordsByStudent(student).length;
-  return base + dated;
-}
-
-function getWeekNumber(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
-
-// ─── Export ─────────────────────────────────────────────────────────────────
-
-export function exportToCsv(): string {
-  const records = getRecords();
-  const header = "ID,Aluno,Data,Dia da Semana,Semana,Ano\n";
-  const rows = records
-    .filter((r) => r.hasDate)
-    .map((r) => [r.id, r.student, r.date, r.weekDay, r.weekNumber, r.year].join(","))
-    .join("\n");
-  return header + rows;
-}
-
-export function downloadCsv() {
-  const csv = exportToCsv();
+  const csv = rows.map((r) => r.join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
+
   const a = document.createElement("a");
   a.href = url;
-  a.download = `jj-presencas-${new Date().toISOString().split("T")[0]}.csv`;
+  a.download = "attendance.csv";
   a.click();
+
   URL.revokeObjectURL(url);
 }

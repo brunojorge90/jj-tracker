@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile, writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { Redis } from "@upstash/redis";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "attendance.json");
+const redis = new Redis({
+  url: "https://driven-viper-104620.upstash.io",
+  token: "gQAAAAAAAZisAAIgcDE4MzZlYTQ1YzhlOWY0NTZjOGFlZmU3YTJhYzVlMDBkMQ",
+});
 
-async function ensureDir() {
-  await mkdir(DATA_DIR, { recursive: true });
-}
+const STORAGE_KEY = "jj_attendance";
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    await ensureDir();
-    const body = await req.json();
-    await writeFile(DATA_FILE, JSON.stringify(body, null, 2), "utf-8");
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    return NextResponse.json({ error: "Failed to write" }, { status: 500 });
+    const body = await request.json();
+    await redis.set(STORAGE_KEY, JSON.stringify(body));
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Redis write error:", error);
+    return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
   }
 }

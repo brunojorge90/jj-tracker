@@ -13,6 +13,7 @@ import {
   initializeStorage,
   saveToFile,
   getTotalCount,
+  fetchFromRedis,
   type Student,
   type AttendanceRecord,
 } from "@/lib/storage";
@@ -45,11 +46,9 @@ function StreakBadge({ student }: { student: Student }) {
 
 function StudentCard({
   student,
-  records,
   onRefresh,
 }: {
   student: { id: Student; name: string; belt: string; emoji: string };
-  records: AttendanceRecord[];
   onRefresh: () => void;
 }) {
   const [justAdded, setJustAdded] = useState(false);
@@ -58,27 +57,19 @@ function StudentCard({
 
   const today = new Date().toISOString().split("T")[0];
 
-  function handleAdd() {
+  async function handleAdd() {
     const dateToSave = selectedDate || today;
-    if (selectedDate) {
-      addRecordWithDate(student.id, selectedDate).then(() => {
-        onRefresh();
-        setJustAdded(true);
-        setSelectedDate("");
-        setTimeout(() => setJustAdded(false), 1500);
-      });
-    } else {
-      addRecord(student.id).then(() => {
-        onRefresh();
-        setJustAdded(true);
-        setTimeout(() => setJustAdded(false), 1500);
-      });
-    }
+    await addRecordWithDate(student.id, dateToSave);
+    onRefresh();
+    setJustAdded(true);
+    setSelectedDate("");
+    setTimeout(() => setJustAdded(false), 1500);
   }
 
-  function handleSave() {
+  async function handleSave() {
     setSaving(true);
-    saveToFile().then(() => setSaving(false));
+    await saveToFile();
+    setSaving(false);
   }
 
   const weeklyCount = getWeeklyRecords(student.id).length;
@@ -146,7 +137,7 @@ function StudentCard({
             onClick={handleSave}
             disabled={saving}
             className="px-4 py-3 rounded-xl font-bold text-xs tracking-widest uppercase transition-all duration-200 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-300 disabled:opacity-50"
-            title="Salvar no arquivo"
+            title="Salvar no Redis"
           >
             {saving ? "..." : "💾"}
           </button>
@@ -221,11 +212,10 @@ export default function HomePage() {
   const [filter, setFilter] = useState<Student | "all">("all");
   const [saveAllState, setSaveAllState] = useState<"idle" | "saving" | "saved">("idle");
 
-  const refresh = useCallback(() => setRecords(getRecordsByStudentFilter()), []);
-
-  function getRecordsByStudentFilter(): AttendanceRecord[] {
-    return filter === "all" ? getRecordsByStudent("bruno").concat(getRecordsByStudent("fabiola")) : getRecordsByStudent(filter);
-  }
+  const loadRecords = useCallback(async () => {
+    const data = await fetchFromRedis();
+    setRecords(data.records);
+  }, []);
 
   useEffect(() => {
     initializeStorage().then((data) => {
@@ -236,15 +226,14 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!loading) refresh();
-  }, [filter, loading, records]);
+    if (!loading) loadRecords();
+  }, [loading, loadRecords]);
 
-  function handleSaveAll() {
+  async function handleSaveAll() {
     setSaveAllState("saving");
-    saveToFile().then(() => {
-      setSaveAllState("saved");
-      setTimeout(() => setSaveAllState("idle"), 2000);
-    });
+    await saveToFile();
+    setSaveAllState("saved");
+    setTimeout(() => setSaveAllState("idle"), 2000);
   }
 
   if (loading) {
@@ -267,7 +256,7 @@ export default function HomePage() {
 
       <section className="flex-1 px-4 pb-8 max-w-xl mx-auto w-full flex flex-col gap-3">
         {STUDENTS.map((s) => (
-          <StudentCard key={s.id} student={s} records={records} onRefresh={refresh} />
+          <StudentCard key={s.id} student={s} onRefresh={loadRecords} />
         ))}
 
         <HistoryTable records={records} filter={filter} onFilterChange={setFilter} />
