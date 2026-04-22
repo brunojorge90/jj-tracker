@@ -8,9 +8,9 @@ import {
   getWeeklyRecords,
   getMonthlyRecords,
   getLastClass,
-  getRecords,
   downloadCsv,
-  seedHistoricalData,
+  initializeStorage,
+  saveToFile,
   getTotalCount,
   type Student,
   type AttendanceRecord,
@@ -42,18 +42,29 @@ function StreakBadge({ student }: { student: Student }) {
   return <span className="text-red-400 text-xs tracking-wide uppercase">{days}d sem aula</span>;
 }
 
-function StudentCard({ student }: { student: { id: Student; name: string; belt: string; emoji: string } }) {
-  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+function StudentCard({
+  student,
+  records,
+  onRefresh,
+}: {
+  student: { id: Student; name: string; belt: string; emoji: string };
+  records: AttendanceRecord[];
+  onRefresh: () => void;
+}) {
   const [justAdded, setJustAdded] = useState(false);
-
-  const refresh = useCallback(() => setRecords(getRecordsByStudent(student.id)), [student.id]);
-  useEffect(() => { refresh(); }, [refresh]);
+  const [saving, setSaving] = useState(false);
 
   function handleAdd() {
-    addRecord(student.id);
-    refresh();
-    setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 1500);
+    addRecord(student.id).then(() => {
+      onRefresh();
+      setJustAdded(true);
+      setTimeout(() => setJustAdded(false), 1500);
+    });
+  }
+
+  function handleSave() {
+    setSaving(true);
+    saveToFile().then(() => setSaving(false));
   }
 
   const weeklyCount = getWeeklyRecords(student.id).length;
@@ -102,24 +113,36 @@ function StudentCard({ student }: { student: { id: Student; name: string; belt: 
         <button
           onClick={handleAdd}
           className={`
-            ml-auto shrink-0 px-6 py-3 rounded-xl font-bold text-sm tracking-widest uppercase transition-all duration-200
+            px-5 py-3 rounded-xl font-bold text-sm tracking-widest uppercase transition-all duration-200
             bg-yellow-600 hover:bg-yellow-500 active:scale-95 text-black
             ${justAdded ? "ring-4 ring-green-400" : "shadow-lg shadow-yellow-900/20"}
           `}
         >
           {justAdded ? "OK" : "+ aula"}
         </button>
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-4 py-3 rounded-xl font-bold text-xs tracking-widest uppercase transition-all duration-200 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-300 disabled:opacity-50"
+          title="Salvar no arquivo"
+        >
+          {saving ? "..." : "💾 Salvar"}
+        </button>
       </div>
     </div>
   );
 }
 
-function HistoryTable() {
-  const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [filter, setFilter] = useState<Student | "all">("all");
-  const refresh = useCallback(() => setRecords(getRecords()), []);
-  useEffect(() => { refresh(); }, [refresh]);
-
+function HistoryTable({
+  records,
+  filter,
+  onFilterChange,
+}: {
+  records: AttendanceRecord[];
+  filter: Student | "all";
+  onFilterChange: (f: Student | "all") => void;
+}) {
   const filtered = filter === "all" ? records : records.filter((r) => r.student === filter);
 
   return (
@@ -130,7 +153,7 @@ function HistoryTable() {
           {(["all", "bruno", "fabiola"] as const).map((f) => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
+              onClick={() => onFilterChange(f)}
               className={`px-3 py-1.5 rounded-lg text-xs tracking-widest uppercase font-medium transition-colors ${
                 filter === f
                   ? "bg-yellow-600 text-black"
@@ -171,9 +194,44 @@ function HistoryTable() {
 }
 
 export default function HomePage() {
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<Student | "all">("all");
+  const [saveAllState, setSaveAllState] = useState<"idle" | "saving" | "saved">("idle");
+
+  const refresh = useCallback(() => setRecords(getRecordsByStudentFilter()), []);
+
+  function getRecordsByStudentFilter(): AttendanceRecord[] {
+    return filter === "all" ? getRecordsByStudent("bruno").concat(getRecordsByStudent("fabiola")) : getRecordsByStudent(filter);
+  }
+
   useEffect(() => {
-    seedHistoricalData();
+    initializeStorage().then((data) => {
+      setRecords(data.records);
+      setLoading(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!loading) refresh();
+  }, [filter, loading, records]);
+
+  function handleSaveAll() {
+    setSaveAllState("saving");
+    saveToFile().then(() => {
+      setSaveAllState("saved");
+      setTimeout(() => setSaveAllState("idle"), 2000);
+    });
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <p className="text-zinc-500 text-sm tracking-widest uppercase">Carregando...</p>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-zinc-950 flex flex-col">
@@ -187,17 +245,31 @@ export default function HomePage() {
 
       <section className="flex-1 px-4 pb-8 max-w-xl mx-auto w-full flex flex-col gap-3">
         {STUDENTS.map((s) => (
-          <StudentCard key={s.id} student={s} />
+          <StudentCard key={s.id} student={s} records={records} onRefresh={refresh} />
         ))}
 
-        <HistoryTable />
+        <HistoryTable records={records} filter={filter} onFilterChange={setFilter} />
 
-        <button
-          onClick={downloadCsv}
-          className="w-full py-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-sm tracking-widest uppercase font-medium transition-colors border border-zinc-800 mt-2"
-        >
-          Exportar CSV
-        </button>
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={handleSaveAll}
+            className={`
+              flex-1 py-3.5 rounded-xl text-sm tracking-widest uppercase font-bold transition-all duration-200
+              ${saveAllState === "saved"
+                ? "bg-green-600 text-white"
+                : "bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800"}
+            `}
+          >
+            {saveAllState === "saving" ? "Salvando..." : saveAllState === "saved" ? "✓ Salvo!" : "💾 Salvar Tudo"}
+          </button>
+
+          <button
+            onClick={downloadCsv}
+            className="flex-1 py-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-sm tracking-widest uppercase font-medium transition-colors border border-zinc-800"
+          >
+            Exportar CSV
+          </button>
+        </div>
       </section>
     </main>
   );
