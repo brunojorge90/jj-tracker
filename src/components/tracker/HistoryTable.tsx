@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Card } from "@/components/ui/Card";
 import type { AttendanceRecord, Student } from "@/lib/types";
 
@@ -29,6 +30,9 @@ export function HistoryTable({
   const [pending, setPending] = useState<AttendanceRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [armed, setArmed] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!pending) {
@@ -170,28 +174,29 @@ export function HistoryTable({
         </div>
       )}
 
-      <AnimatePresence>
-        {pending && (
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center px-4"
-            onClick={() => armed && !deleting && setPending(null)}
-          >
+      {mounted && createPortal(
+        <AnimatePresence>
+          {pending && (
             <motion.div
-              key="modal"
-              initial={{ opacity: 0, y: 40, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 40, scale: 0.95 }}
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-              onClick={(e) => e.stopPropagation()}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-title"
-              className="w-full max-w-sm mb-4 sm:mb-0 dojo-card rounded-2xl overflow-hidden"
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center px-4"
+              onClick={() => armed && !deleting && setPending(null)}
             >
+              <motion.div
+                key="modal"
+                initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 40, scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-title"
+                className="w-full max-w-sm mb-4 sm:mb-0 dojo-card rounded-2xl overflow-hidden"
+              >
               <div className="px-6 pt-6 pb-4 text-center">
                 <div className="mx-auto w-14 h-14 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center mb-4">
                   <TrashIcon className="w-6 h-6 text-red-400" />
@@ -213,26 +218,30 @@ export function HistoryTable({
                   </span>
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-0 border-t border-[color:var(--dojo-border)]">
-                <button
-                  onClick={() => setPending(null)}
-                  disabled={deleting}
-                  className="min-h-[52px] font-bold text-sm tracking-[0.2em] uppercase text-[color:var(--dojo-text-muted)] hover:text-white hover:bg-[color:var(--dojo-surface-hi)] transition-colors border-r border-[color:var(--dojo-border)] disabled:opacity-60"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  disabled={deleting}
-                  className="min-h-[52px] font-black text-sm tracking-[0.2em] uppercase text-red-300 hover:text-white hover:bg-red-500/20 transition-colors disabled:opacity-60"
-                >
-                  {deleting ? "…" : "Apagar"}
-                </button>
-              </div>
+                <div className="grid grid-cols-2 gap-0 border-t border-[color:var(--dojo-border)]">
+                  <button
+                    type="button"
+                    onClick={() => setPending(null)}
+                    disabled={deleting}
+                    className="min-h-[52px] font-bold text-sm tracking-[0.2em] uppercase text-[color:var(--dojo-text-muted)] hover:text-white hover:bg-[color:var(--dojo-surface-hi)] transition-colors border-r border-[color:var(--dojo-border)] disabled:opacity-60"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDelete}
+                    disabled={deleting}
+                    className="min-h-[52px] font-black text-sm tracking-[0.2em] uppercase text-red-300 hover:text-white hover:bg-red-500/20 transition-colors disabled:opacity-60"
+                  >
+                    {deleting ? "…" : "Apagar"}
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </Card>
   );
 }
