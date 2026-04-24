@@ -1,0 +1,36 @@
+export const tokens = {
+  color: {
+    bg: "#0a0a0a",
+    bgElev: "#141310",
+    surface: "#1c1917",
+    border: "#292524",
+    borderSubtle: "#1f1d1a",
+    text: "#fafaf9",
+    textMuted: "#a8a29e",
+    textDim: "#78716c",
+    amber: "#f59e0b",
+    amberBurn: "#d97706",
+    amberSoft: "#fcd34d",
+    amberHalo: "rgba(245, 158, 11, 0.15)",
+    success: "#22c55e",
+    warn: "#fb923c",
+    danger: "#ef4444",
+  },
+  shadow: {
+    warm: "0 20px 40px -15px rgba(245,158,11,0.15)",
+    soft: "0 10px 30px -10px rgba(0,0,0,0.5)",
+    ring: "0 0 0 4px rgba(245,158,11,0.25)",
+  },
+  radius: {
+    sm: "0.5rem",
+    md: "0.75rem",
+    lg: "1rem",
+    xl: "1.25rem",
+    full: "9999px",
+  },
+  ease: {
+    out: [0.22, 1, 0.36, 1] as const,
+    inOut: [0.65, 0, 0.35, 1] as const,
+    spring: { type: "spring", stiffness: 400, damping: 32 } as const,
+  },
+} as const;

@@ -1,287 +1,241 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import {
-  STUDENTS,
-  addRecord,
-  addRecordWithDate,
-  getRecordsByStudent,
-  getWeeklyRecords,
-  getMonthlyRecords,
-  getLastClass,
-  downloadCsv,
-  initializeStorage,
-  saveToFile,
-  getTotalCount,
-  fetchFromRedis,
-  type Student,
-  type AttendanceRecord,
-} from "@/lib/storage";
+import { AnimatePresence, motion } from "framer-motion";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { HistoryTable } from "@/components/tracker/HistoryTable";
+import { StudentCard } from "@/components/tracker/StudentCard";
+import { STUDENTS, type AttendanceRecord, type Student } from "@/lib/types";
 
-function formatDate(dateStr: string): string {
-  if (dateStr === "----") return "--";
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+function downloadCsv(records: AttendanceRecord[]): void {
+  const rows = [["Aluno", "Data", "Dia da Semana"]];
+  records.forEach((r) => rows.push([r.student, r.date, r.weekDay]));
+  const csv = rows.map((r) => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "attendance.csv";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-function daysAgo(dateStr: string): number {
-  const then = new Date(dateStr + "T00:00:00");
-  const now = new Date();
-  return Math.floor((now.getTime() - then.getTime()) / 86400000);
-}
-
-function StreakBadge({ student }: { student: Student }) {
-  const [last, setLast] = useState<AttendanceRecord | null>(null);
-  useEffect(() => { setLast(getLastClass(student)); }, [student]);
-  if (!last) return null;
-  const days = daysAgo(last.date);
-  if (days === 0) return <span className="text-green-400 font-bold text-xs tracking-wide uppercase">Hoje</span>;
-  if (days === 1) return <span className="text-zinc-400 text-xs tracking-wide uppercase">Ontem</span>;
-  if (days <= 5) return <span className="text-orange-400 text-xs tracking-wide uppercase">{days}d sem aula</span>;
-  return <span className="text-red-400 text-xs tracking-wide uppercase">{days}d sem aula</span>;
-}
-
-function StudentCard({
-  student,
-  onRefresh,
-}: {
-  student: { id: Student; name: string; belt: string; emoji: string };
-  onRefresh: () => void;
-}) {
-  const [justAdded, setJustAdded] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [selectedDate, setSelectedDate] = useState("");
-
-  const today = new Date().toISOString().split("T")[0];
-
-  async function handleAdd() {
-    const dateToSave = selectedDate || today;
-    await addRecordWithDate(student.id, dateToSave);
-    onRefresh();
-    setJustAdded(true);
-    setSelectedDate("");
-    setTimeout(() => setJustAdded(false), 1500);
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    await saveToFile();
-    setSaving(false);
-  }
-
-  const weeklyCount = getWeeklyRecords(student.id).length;
-  const monthlyCount = getMonthlyRecords(student.id).length;
-  const totalCount = getTotalCount(student.id);
-  const lastClass = getLastClass(student.id);
-
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-      <div className="px-6 py-5 flex items-center justify-between">
-        <div>
-          <p className="text-zinc-400 text-xs tracking-widest uppercase font-medium mb-0.5">{student.belt}</p>
-          <h2 className="text-white font-bold text-2xl tracking-tight">{student.name}</h2>
-        </div>
-
-        <div className="text-right">
-          <p className="text-4xl font-black text-yellow-500 leading-none">{totalCount}</p>
-          <p className="text-zinc-500 text-xs tracking-widest uppercase mt-0.5">aulas</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 border-y border-zinc-800">
-        <div className="px-6 py-4 border-r border-zinc-800">
-          <p className="text-2xl font-bold text-blue-400">{monthlyCount}</p>
-          <p className="text-zinc-500 text-xs tracking-widest uppercase mt-0.5">este mes</p>
-        </div>
-        <div className="px-6 py-4">
-          <p className="text-2xl font-bold text-purple-400">{weeklyCount}</p>
-          <p className="text-zinc-500 text-xs tracking-widest uppercase mt-0.5">esta semana</p>
-        </div>
-      </div>
-
-      <div className="px-6 py-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          {lastClass ? (
-            <>
-              <span className="text-zinc-500 text-xs tracking-wide shrink-0">ultima:</span>
-              <span className="text-zinc-300 text-sm truncate">{formatDate(lastClass.date)}</span>
-              <StreakBadge student={student.id} />
-            </>
-          ) : (
-            <span className="text-zinc-600 text-sm">sem aulas com data</span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            max={today}
-            className="bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-600"
-          />
-          <button
-            onClick={handleAdd}
-            className={`
-              px-5 py-3 rounded-xl font-bold text-sm tracking-widest uppercase transition-all duration-200
-              bg-yellow-600 hover:bg-yellow-500 active:scale-95 text-black
-              ${justAdded ? "ring-4 ring-green-400" : "shadow-lg shadow-yellow-900/20"}
-            `}
-          >
-            {justAdded ? "OK" : "+ aula"}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-3 rounded-xl font-bold text-xs tracking-widest uppercase transition-all duration-200 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-300 disabled:opacity-50"
-            title="Salvar no Redis"
-          >
-            {saving ? "..." : "💾"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function HistoryTable({
-  records,
-  filter,
-  onFilterChange,
-}: {
-  records: AttendanceRecord[];
-  filter: Student | "all";
-  onFilterChange: (f: Student | "all") => void;
-}) {
-  const filtered = filter === "all" ? records : records.filter((r) => r.student === filter);
-
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-        <h3 className="text-white font-bold text-base tracking-wide">HISTORICO</h3>
-        <div className="flex gap-1">
-          {(["all", "bruno", "fabiola"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => onFilterChange(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs tracking-widest uppercase font-medium transition-colors ${
-                filter === f
-                  ? "bg-yellow-600 text-black"
-                  : "bg-zinc-800 text-zinc-400 hover:text-white"
-              }`}
-            >
-              {f === "all" ? "Todos" : f === "bruno" ? "Bruno" : "Fabiola"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="overflow-y-auto max-h-56">
-        <table className="w-full text-sm">
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="text-zinc-600 text-center py-10 text-sm tracking-wide">
-                  Nenhuma aula registrada
-                </td>
-              </tr>
-            ) : (
-              filtered.map((r) => (
-                <tr key={r.id} className="border-b border-zinc-800/50">
-                  <td className="px-6 py-3 text-zinc-400 text-xs tracking-widest uppercase w-24">
-                    {r.student === "bruno" ? "BRUNO" : "FABIOLA"}
-                  </td>
-                  <td className="py-3 text-zinc-200 text-sm">{formatDate(r.date)}</td>
-                  <td className="py-3 text-zinc-500 text-sm pr-6 text-right capitalize">{r.weekDay}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+type SyncState = "idle" | "syncing" | "error";
 
 export default function HomePage() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Student | "all">("all");
-  const [saveAllState, setSaveAllState] = useState<"idle" | "saving" | "saved">("idle");
+  const [sync, setSync] = useState<SyncState>("idle");
+  const [toast, setToast] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   const loadRecords = useCallback(async () => {
-    const data = await fetchFromRedis();
-    setRecords(data.records);
-  }, []);
-
-  useEffect(() => {
-    initializeStorage().then((data) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setSync("syncing");
+    try {
+      const res = await fetch("/api/records", { cache: "no-store" });
+      if (!res.ok) throw new Error("failed");
+      const data = (await res.json()) as { records: AttendanceRecord[] };
       setRecords(data.records);
-      setLoading(false);
+      setSync("idle");
+    } catch {
+      setSync("error");
+    } finally {
+      inFlight.current = false;
+    }
+  }, []);
+
+  const addRecord = useCallback(async (student: Student, date: string) => {
+    const res = await fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ student, date }),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!res.ok) {
+      setToast("Erro ao salvar. Tente de novo.");
+      setTimeout(() => setToast(null), 2500);
+      return;
+    }
+    const data = (await res.json()) as { records: AttendanceRecord[] };
+    setRecords(data.records);
+    setToast("押忍 aula registrada");
+    setTimeout(() => setToast(null), 1800);
   }, []);
 
   useEffect(() => {
-    if (!loading) loadRecords();
-  }, [loading, loadRecords]);
+    loadRecords().finally(() => setLoading(false));
+  }, [loadRecords]);
 
-  async function handleSaveAll() {
-    setSaveAllState("saving");
-    await saveToFile();
-    setSaveAllState("saved");
-    setTimeout(() => setSaveAllState("idle"), 2000);
-  }
-
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <p className="text-zinc-500 text-sm tracking-widest uppercase">Carregando...</p>
-      </main>
-    );
-  }
+  useEffect(() => {
+    const onFocus = () => loadRecords();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadRecords();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    const interval = setInterval(loadRecords, 10000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(interval);
+    };
+  }, [loadRecords]);
 
   return (
-    <main className="min-h-screen bg-zinc-950 flex flex-col">
-      <header className="px-4 pt-8 pb-6 flex flex-col items-center text-center">
-        <img src="/team-logo.jpg" alt="Logo equipe" className="w-20 h-20 rounded-xl object-cover" />
-        <h1 className="text-2xl font-black text-white tracking-tighter">
-          Jiu Jitsu <span className="text-yellow-500">Tracker</span>
-        </h1>
-        <p className="text-zinc-500 text-sm mt-1 tracking-wide">Bruno & Fabiola</p>
+    <main className="min-h-dvh flex flex-col">
+      <header className="relative px-4 pt-8 sm:pt-14 pb-6 sm:pb-8 flex flex-col items-center text-center">
+        {/* Kanji 柔術 (jiu-jutsu) gigante atrás do header */}
+        <span
+          aria-hidden="true"
+          className="font-kanji absolute top-2 left-1/2 -translate-x-1/2 text-[160px] sm:text-[240px] leading-none text-[color:var(--dojo-amber)] opacity-[0.05] pointer-events-none select-none whitespace-nowrap"
+        >
+          柔術
+        </span>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="relative"
+        >
+          <div className="absolute inset-0 rounded-2xl bg-[color:var(--dojo-amber)] blur-2xl opacity-40 scale-110" aria-hidden="true" />
+          <img
+            src="/team-logo.jpg"
+            alt="Logo da equipe"
+            className="relative w-16 h-16 sm:w-24 sm:h-24 rounded-2xl object-cover ring-1 ring-[color:var(--dojo-amber)]/40 shadow-[0_20px_60px_-20px_rgba(245,158,11,0.8)]"
+          />
+        </motion.div>
+        <motion.h1
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          className="relative font-display text-[28px] sm:text-5xl mt-3 sm:mt-4 text-white uppercase tracking-[0.04em]"
+        >
+          Jiu Jitsu <span className="text-[color:var(--dojo-amber)]">Tracker</span>
+        </motion.h1>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.25 }}
+          className="relative text-[color:var(--dojo-text-dim)] text-[10px] sm:text-sm mt-1.5 sm:mt-2 tracking-[0.28em] uppercase flex items-center gap-2"
+        >
+          <span className="w-5 h-px bg-[color:var(--dojo-amber)]/40" />
+          Bruno · Fabíola
+          <span className="w-5 h-px bg-[color:var(--dojo-amber)]/40" />
+        </motion.p>
+
+        <div className="mt-3 flex items-center gap-2 h-5">
+          <AnimatePresence>
+            {sync === "syncing" && (
+              <motion.span
+                key="syncing"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-[10px] tracking-[0.22em] uppercase text-[color:var(--dojo-text-dim)] flex items-center gap-1.5"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 dojo-pulse" />
+                sincronizando
+              </motion.span>
+            )}
+            {sync === "error" && (
+              <motion.span
+                key="error"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-[10px] tracking-[0.22em] uppercase text-red-400"
+              >
+                ● sem conexão — tentando de novo
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
       </header>
 
-      <section className="flex-1 px-4 pb-8 max-w-xl mx-auto w-full flex flex-col gap-3">
-        {STUDENTS.map((s) => (
-          <StudentCard key={s.id} student={s} onRefresh={loadRecords} />
-        ))}
-
-        <HistoryTable records={records} filter={filter} onFilterChange={setFilter} />
-
-        <div className="flex gap-2 mt-2">
-          <button
-            onClick={handleSaveAll}
-            className={`
-              flex-1 py-3.5 rounded-xl text-sm tracking-widest uppercase font-bold transition-all duration-200
-              ${saveAllState === "saved"
-                ? "bg-green-600 text-white"
-                : "bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800"}
-            `}
+      <section className="flex-1 px-4 pb-10 w-full max-w-5xl mx-auto">
+        {loading ? (
+          <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-4">
+            <Skeleton className="h-56" />
+            <Skeleton className="h-56" />
+            <Skeleton className="h-64 md:col-span-2" />
+          </div>
+        ) : (
+          <motion.div
+            initial="hidden"
+            animate="show"
+            variants={{
+              hidden: {},
+              show: { transition: { staggerChildren: 0.08 } },
+            }}
+            className="flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-4"
           >
-            {saveAllState === "saving" ? "Salvando..." : saveAllState === "saved" ? "✓ Salvo!" : "💾 Salvar Tudo"}
-          </button>
+            {STUDENTS.map((s) => (
+              <motion.div
+                key={s.id}
+                variants={{
+                  hidden: { opacity: 0, y: 12 },
+                  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+                }}
+              >
+                <StudentCard student={s} records={records} onAdd={addRecord} />
+              </motion.div>
+            ))}
 
-          <button
-            onClick={downloadCsv}
-            className="flex-1 py-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-sm tracking-widest uppercase font-medium transition-colors border border-zinc-800"
-          >
-            Exportar CSV
-          </button>
-        </div>
+            <motion.div
+              variants={{
+                hidden: { opacity: 0, y: 12 },
+                show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+              }}
+              className="md:col-span-2"
+            >
+              <HistoryTable records={records} filter={filter} onFilterChange={setFilter} />
+            </motion.div>
+
+            <motion.div
+              variants={{
+                hidden: { opacity: 0 },
+                show: { opacity: 1, transition: { duration: 0.4 } },
+              }}
+              className="md:col-span-2 flex justify-center"
+            >
+              <button
+                onClick={() => downloadCsv(records)}
+                className="px-8 py-3 rounded-xl bg-[color:var(--dojo-surface)]/60 hover:bg-[color:var(--dojo-surface-hi)] text-[color:var(--dojo-amber-soft)] hover:text-white text-xs tracking-[0.22em] uppercase font-bold transition-colors border border-[color:var(--dojo-border-hot)] dojo-ring-amber shadow-[inset_0_1px_0_rgba(245,158,11,0.08)]"
+              >
+                Exportar CSV
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
       </section>
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key={toast}
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 500, damping: 32 }}
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-[color:var(--dojo-surface)] border border-[color:var(--dojo-amber)]/40 text-white text-sm tracking-wide shadow-[0_20px_60px_-20px_rgba(245,158,11,0.6)] flex items-center gap-2"
+          >
+            {toast.startsWith("押忍") ? (
+              <>
+                <span className="font-kanji text-[color:var(--dojo-amber)] text-lg leading-none">押忍</span>
+                <span className="text-[color:var(--dojo-amber)]/40">·</span>
+                <span>{toast.replace("押忍 ", "")}</span>
+              </>
+            ) : (
+              toast
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }
