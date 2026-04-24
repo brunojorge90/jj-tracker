@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import type { AttendanceRecord, Student } from "@/lib/types";
 
@@ -28,6 +28,16 @@ export function HistoryTable({
   const [editMode, setEditMode] = useState(false);
   const [pending, setPending] = useState<AttendanceRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!pending) {
+      setArmed(false);
+      return;
+    }
+    const t = setTimeout(() => setArmed(true), 350);
+    return () => clearTimeout(t);
+  }, [pending]);
 
   async function confirmDelete() {
     if (!pending) return;
@@ -168,7 +178,7 @@ export function HistoryTable({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center px-4"
-            onClick={() => !deleting && setPending(null)}
+            onClick={() => armed && !deleting && setPending(null)}
           >
             <motion.div
               key="modal"
