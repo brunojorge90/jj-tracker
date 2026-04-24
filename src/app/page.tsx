@@ -64,6 +64,19 @@ export default function HomePage() {
     setTimeout(() => setToast(null), 1800);
   }, []);
 
+  const deleteRecord = useCallback(async (id: number) => {
+    const res = await fetch(`/api/records/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setToast("Erro ao apagar. Tente de novo.");
+      setTimeout(() => setToast(null), 2500);
+      return;
+    }
+    const data = (await res.json()) as { records: AttendanceRecord[] };
+    setRecords(data.records);
+    setToast("Aula removida");
+    setTimeout(() => setToast(null), 1800);
+  }, []);
+
   useEffect(() => {
     loadRecords().finally(() => setLoading(false));
   }, [loadRecords]);
@@ -191,7 +204,12 @@ export default function HomePage() {
               }}
               className="md:col-span-2"
             >
-              <HistoryTable records={records} filter={filter} onFilterChange={setFilter} />
+              <HistoryTable
+                records={records}
+                filter={filter}
+                onFilterChange={setFilter}
+                onDelete={deleteRecord}
+              />
             </motion.div>
 
             <motion.div

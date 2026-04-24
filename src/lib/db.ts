@@ -25,3 +25,7 @@ export async function listRecords(): Promise<AttendanceRecord[]> {
 export async function insertRecord(student: Student, date: string): Promise<void> {
   await sql`INSERT INTO attendance (student, date) VALUES (${student}, ${date})`;
 }
+
+export async function deleteRecord(id: number): Promise<void> {
+  await sql`DELETE FROM attendance WHERE id = ${id}`;
+}
