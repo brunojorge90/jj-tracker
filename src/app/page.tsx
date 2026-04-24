@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DojoHeroLogo } from "@/components/layout/DojoEmblem";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { HistoryTable } from "@/components/tracker/HistoryTable";
 import { StudentCard } from "@/components/tracker/StudentCard";
@@ -99,26 +100,12 @@ export default function HomePage() {
   return (
     <main className="min-h-dvh flex flex-col">
       <header className="relative px-4 pt-8 sm:pt-14 pb-6 sm:pb-8 flex flex-col items-center text-center">
-        {/* Kanji 柔術 (jiu-jutsu) gigante atrás do header */}
-        <span
-          aria-hidden="true"
-          className="font-kanji absolute top-2 left-1/2 -translate-x-1/2 text-[160px] sm:text-[240px] leading-none text-[color:var(--dojo-amber)] opacity-[0.05] pointer-events-none select-none whitespace-nowrap"
-        >
-          柔術
-        </span>
-
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
+          initial={{ opacity: 0, scale: 0.85 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative"
+          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="absolute inset-0 rounded-2xl bg-[color:var(--dojo-amber)] blur-2xl opacity-40 scale-110" aria-hidden="true" />
-          <img
-            src="/team-logo.jpg"
-            alt="Logo da equipe"
-            className="relative w-16 h-16 sm:w-24 sm:h-24 rounded-2xl object-cover ring-1 ring-[color:var(--dojo-amber)]/40 shadow-[0_20px_60px_-20px_rgba(245,158,11,0.8)]"
-          />
+          <DojoHeroLogo className="w-24 h-24 sm:w-32 sm:h-32" />
         </motion.div>
         <motion.h1
           initial={{ opacity: 0, y: 8 }}

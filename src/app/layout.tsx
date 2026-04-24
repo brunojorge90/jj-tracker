@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { DojoEmblem } from "@/components/layout/DojoEmblem";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -31,6 +32,7 @@ export default function RootLayout({
       <body className="bg-[color:var(--dojo-bg)] text-[color:var(--dojo-text)] antialiased">
         <div className="dojo-bg-mesh" aria-hidden="true" />
         <div className="dojo-tatami" aria-hidden="true" />
+        <DojoEmblem />
         <div className="dojo-grain" aria-hidden="true" />
         <div className="relative z-10">{children}</div>
       </body>
