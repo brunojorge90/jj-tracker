@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { BeltStripe } from "./BeltStripe";
 import { CountUp } from "./CountUp";
+import { DateSelector } from "./DateSelector";
 import { StreakBadge } from "./StreakBadge";
 import {
   getLastClass,
@@ -132,15 +133,13 @@ export function StudentCard({
           )}
         </div>
 
-        {/* Controles — mobile-first: stack; desktop: inline */}
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="date"
+        {/* Controles — data em destaque + botão abaixo */}
+        <div className="flex flex-col gap-2.5">
+          <DateSelector
+            id={`date-${student.id}`}
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            onChange={setSelectedDate}
             max={today}
-            aria-label="Data da aula (opcional — padrão: hoje)"
-            className="bg-[color:var(--dojo-bg-elev)] border border-[color:var(--dojo-border-hot)] text-[color:var(--dojo-amber-soft)] text-base sm:text-sm rounded-xl px-3 py-3 sm:py-2.5 dojo-ring-amber tabular-nums w-full sm:w-[140px] min-h-[48px] sm:min-h-0 [color-scheme:dark]"
           />
           <motion.button
             key={haloKey}
@@ -151,8 +150,8 @@ export function StudentCard({
             disabled={saving}
             aria-label={`Adicionar aula de ${student.name}`}
             className={`
-              relative flex-1 sm:flex-none min-h-[52px] sm:min-h-0 px-6 py-3 rounded-xl
-              font-black text-base sm:text-sm tracking-[0.2em] uppercase
+              relative w-full min-h-[56px] px-6 py-3 rounded-xl
+              font-black text-base tracking-[0.22em] uppercase
               bg-gradient-to-b from-[#fbbf24] to-[color:var(--dojo-amber-burn)]
               text-black dojo-ring-amber
               shadow-[0_10px_28px_-8px_rgba(245,158,11,0.75),inset_0_1px_0_rgba(255,255,255,0.3)]
