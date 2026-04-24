@@ -1,7 +1,5 @@
 "use client";
 
-import { useRef } from "react";
-
 function formatDisplay(dateStr: string, today: string): { main: string; tag: string } {
   if (!dateStr || dateStr === today) {
     const t = new Date(today + "T00:00:00");
@@ -30,54 +28,35 @@ export function DateSelector({
   max: string;
   id: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const { main, tag } = formatDisplay(value, max);
 
-  function openPicker() {
-    const el = inputRef.current;
-    if (!el) return;
-    if (typeof el.showPicker === "function") {
-      try {
-        el.showPicker();
-        return;
-      } catch {
-        /* fall through */
-      }
-    }
-    el.focus();
-    el.click();
-  }
-
   return (
-    <div className="relative w-full">
+    <label
+      htmlFor={id}
+      className="
+        relative block w-full cursor-pointer
+        min-h-[56px] sm:min-h-[48px] rounded-xl
+        bg-[color:var(--dojo-bg-elev)]
+        border border-[color:var(--dojo-border-hot)]
+        shadow-[inset_0_1px_0_rgba(245,158,11,0.1)]
+        hover:border-[color:var(--dojo-amber)]/60 transition-colors
+        focus-within:ring-2 focus-within:ring-[color:var(--dojo-amber)] focus-within:ring-offset-2 focus-within:ring-offset-[color:var(--dojo-bg)]
+      "
+    >
+      {/* Input na frente, invisível mas totalmente clicável */}
       <input
-        ref={inputRef}
         id={id}
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         max={max}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [color-scheme:dark]"
         aria-label="Escolher data da aula"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]"
       />
-      <button
-        type="button"
-        onClick={openPicker}
-        tabIndex={-1}
-        aria-hidden="true"
-        className="
-          relative w-full min-h-[56px] sm:min-h-[48px] px-4 rounded-xl
-          bg-[color:var(--dojo-bg-elev)]
-          border border-[color:var(--dojo-border-hot)]
-          shadow-[inset_0_1px_0_rgba(245,158,11,0.1)]
-          flex items-center gap-3
-          hover:border-[color:var(--dojo-amber)]/60 transition-colors
-          active:scale-[0.99]
-          dojo-ring-amber
-        "
-      >
+      {/* Camada visual — pointer-events-none garante que o input receba TODOS os taps */}
+      <div className="pointer-events-none w-full h-full min-h-[56px] sm:min-h-[48px] px-4 flex items-center gap-3">
         <CalendarIcon className="w-5 h-5 text-[color:var(--dojo-amber)] shrink-0" />
-        <div className="flex-1 flex items-baseline gap-2 min-w-0 text-left">
+        <div className="flex-1 flex items-baseline gap-2 min-w-0">
           <span className="text-[10px] tracking-[0.22em] uppercase text-[color:var(--dojo-text-dim)] font-bold">
             data
           </span>
@@ -91,8 +70,8 @@ export function DateSelector({
           )}
         </div>
         <ChevronIcon className="w-4 h-4 text-[color:var(--dojo-amber)]/70 shrink-0" />
-      </button>
-    </div>
+      </div>
+    </label>
   );
 }
 

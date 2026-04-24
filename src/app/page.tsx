@@ -65,17 +65,25 @@ export default function HomePage() {
     setTimeout(() => setToast(null), 1800);
   }, []);
 
-  const deleteRecord = useCallback(async (id: number) => {
-    const res = await fetch(`/api/records/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      setToast("Erro ao apagar. Tente de novo.");
-      setTimeout(() => setToast(null), 2500);
-      return;
+  const deleteRecord = useCallback(async (id: number | string) => {
+    try {
+      const res = await fetch(`/api/records/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error("delete failed", res.status, body);
+        setToast(`Erro ${res.status} ao apagar`);
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      const data = (await res.json()) as { records: AttendanceRecord[] };
+      setRecords(data.records);
+      setToast("Aula removida");
+      setTimeout(() => setToast(null), 1800);
+    } catch (err) {
+      console.error("delete exception", err);
+      setToast("Erro de rede ao apagar");
+      setTimeout(() => setToast(null), 3000);
     }
-    const data = (await res.json()) as { records: AttendanceRecord[] };
-    setRecords(data.records);
-    setToast("Aula removida");
-    setTimeout(() => setToast(null), 1800);
   }, []);
 
   useEffect(() => {

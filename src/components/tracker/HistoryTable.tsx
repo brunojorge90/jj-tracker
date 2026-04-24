@@ -22,7 +22,7 @@ export function HistoryTable({
   records: AttendanceRecord[];
   filter: Student | "all";
   onFilterChange: (f: Student | "all") => void;
-  onDelete: (id: number) => Promise<void>;
+  onDelete: (id: number | string) => Promise<void>;
 }) {
   const filtered = filter === "all" ? records : records.filter((r) => r.student === filter);
   const [editMode, setEditMode] = useState(false);
